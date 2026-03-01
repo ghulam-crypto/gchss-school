@@ -6,6 +6,7 @@ Railway Deployment Ready
 
 import json
 import os
+import uvicorn
 from mcp.server.fastmcp import FastMCP
 import gspread
 from google.oauth2.service_account import Credentials
@@ -33,7 +34,6 @@ mcp = FastMCP("gchss-school")
 
 # ── GOOGLE SHEETS HELPERS ─────────────────────────────────────────────────────
 def get_spreadsheet():
-    # Load credentials from environment variable (not a file)
     creds_json = json.loads(os.environ["GOOGLE_CREDENTIALS"])
     creds = Credentials.from_service_account_info(creds_json, scopes=SCOPES)
     client = gspread.authorize(creds)
@@ -125,4 +125,5 @@ def get_statistics(class_name: str = "") -> str:
 # ── RUN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    mcp.run(transport="sse", host="0.0.0.0", port=port)
+    app = mcp.sse_app()
+    uvicorn.run(app, host="0.0.0.0", port=port)
