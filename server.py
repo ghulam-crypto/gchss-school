@@ -122,11 +122,7 @@ def get_statistics(class_name: str = "") -> str:
         "breakdown": stats
     }, indent=2)
 
-
-    # ── RUN ───────────────────────────────────────────────────────────────────────
+# ── RUN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import uvicorn
-    from mcp.server.fastmcp import FastMCP
-    
     port = int(os.environ.get("PORT", 8000))
-    mcp.run(transport="sse", port=port)
+    mcp.run(transport="sse", host="0.0.0.0", port=port)
