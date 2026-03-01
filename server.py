@@ -89,6 +89,16 @@ def add_record(sheet: str, data: dict) -> str:
     return f"Record added to {sheet} successfully!"
 
 @mcp.tool()
+def add_bulk_records(sheet: str, records: list) -> str:
+    """Add multiple rows to any sheet at once. records should be a list of dicts with column name to value pairs."""
+    s          = get_sheet(sheet)
+    all_values = s.get_all_values()
+    headers    = all_values[0] if all_values else []
+    rows       = [[record.get(h, "") for h in headers] for record in records]
+    s.append_rows(rows)
+    return f"{len(rows)} records added to {sheet} successfully!"
+
+@mcp.tool()
 def update_record(sheet: str, key_column: str, key_value: str, field: str, value: str) -> str:
     """Update a field in a row. Find row by key_column=key_value, then update field to value."""
     s          = get_sheet(sheet)
