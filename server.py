@@ -134,22 +134,9 @@ def get_statistics(class_name: str = "") -> str:
 
 # ── RUN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 8000))
-    app = mcp.sse_app()
-
-    # Add CORS middleware to fix 421 on Railway
-    from starlette.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
         forwarded_allow_ips="*",
         proxy_headers=True,
         ws_ping_interval=20,
