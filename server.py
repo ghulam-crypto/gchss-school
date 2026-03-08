@@ -6,6 +6,7 @@ Railway Deployment Ready
 
 import json
 import os
+import asyncio
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 import gspread
@@ -136,15 +137,24 @@ def get_statistics(class_name: str = "") -> str:
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
 
-    import uvicorn
     from starlette.applications import Starlette
     from starlette.routing import Mount, Route
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
     from starlette.middleware.cors import CORSMiddleware
     from mcp.server.sse import SseServerTransport
 
     sse_transport = SseServerTransport("/messages/")
 
-    async def handle_sse(request):
+    # Track initialization state
+    _initialized = False
+
+    async def handle_sse(request: Request):
+        global _initialized
+        # FIX: wait for MCP server to fully initialize before first connection
+        if not _initialized:
+            await asyncio.sleep(1.5)
+            _initialized = True
         async with sse_transport.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
@@ -153,8 +163,19 @@ if __name__ == "__main__":
                 mcp._mcp_server.create_initialization_options()
             )
 
+    # Health check — keeps Railway happy + lets you verify server is alive
+    async def health(request: Request):
+        return JSONResponse({
+            "status": "ok",
+            "service": "gchss-school MCP",
+            "port": port,
+            "sheets": list(SHEETS.keys())
+        })
+
     starlette_app = Starlette(routes=[
-        Route("/sse", endpoint=handle_sse),
+        Route("/",         endpoint=health),      # Railway health check
+        Route("/health",   endpoint=health),      # Extra health endpoint
+        Route("/sse",      endpoint=handle_sse),  # MCP SSE endpoint
         Mount("/messages", app=sse_transport.handle_post_message),
     ])
 
@@ -165,6 +186,7 @@ if __name__ == "__main__":
         allow_headers=["*"],
     )
 
+    print(f"✅ GCHSS MCP Server starting on port {port}")
     uvicorn.run(
         starlette_app,
         host="0.0.0.0",
