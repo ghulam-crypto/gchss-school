@@ -163,7 +163,7 @@ if __name__ == "__main__":
                 mcp._mcp_server.create_initialization_options()
             )
 
-    # Health check — keeps Railway happy + lets you verify server is alive
+    # ── Health check ──────────────────────────────────────────────────────────
     async def health(request: Request):
         return JSONResponse({
             "status": "ok",
@@ -172,11 +172,79 @@ if __name__ == "__main__":
             "sheets": list(SHEETS.keys())
         })
 
+    # ── NEW: REST API endpoints for the live dashboard ────────────────────────
+
+    async def api_students(request: Request):
+        """Returns all students as JSON — used by the live marks dashboard."""
+        try:
+            records = sheet_to_records(get_sheet("students"))
+            return JSONResponse(records)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    async def api_teachers(request: Request):
+        """Returns all teachers as JSON — used by the live marks dashboard."""
+        try:
+            records = sheet_to_records(get_sheet("teachers"))
+            return JSONResponse(records)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    async def api_stats(request: Request):
+        """Returns summary stats as JSON — used by the live marks dashboard."""
+        try:
+            students = sheet_to_records(get_sheet("students"))
+            subjects = [
+                "English","Mathematics","Social Studies","Sindhi","Islamiat",
+                "G.Science","Urdu","Arabic","Physics","Biology","Chemistry","Computer"
+            ]
+            # Build class-level stats
+            classes = {}
+            for s in students:
+                cls = s.get("Class", "").strip()
+                if not cls:
+                    continue
+                if cls not in classes:
+                    classes[cls] = {"total": 0, "hasResult": 0, "hasMarks": 0, "subjects": {sub: 0 for sub in subjects}}
+                classes[cls]["total"] += 1
+                if s.get("Result", "").strip():
+                    classes[cls]["hasResult"] += 1
+                has_any_mark = any(
+                    str(s.get(sub, "")).strip() not in ("", "0")
+                    for sub in subjects
+                )
+                if has_any_mark:
+                    classes[cls]["hasMarks"] += 1
+                for sub in subjects:
+                    val = str(s.get(sub, "")).strip()
+                    if val and val != "0":
+                        classes[cls]["subjects"][sub] += 1
+
+            total    = len(students)
+            has_marks = sum(1 for cls in classes.values() for _ in range(cls["hasMarks"]))
+            has_result = sum(cls["hasResult"] for cls in classes.values())
+
+            return JSONResponse({
+                "total":     total,
+                "hasMarks":  sum(c["hasMarks"]  for c in classes.values()),
+                "hasResult": sum(c["hasResult"] for c in classes.values()),
+                "pending":   total - sum(c["hasMarks"] for c in classes.values()),
+                "classes":   classes,
+                "generatedAt": "live"
+            })
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    # ── Starlette app with all routes ─────────────────────────────────────────
     starlette_app = Starlette(routes=[
-        Route("/",         endpoint=health),      # Railway health check
-        Route("/health",   endpoint=health),      # Extra health endpoint
-        Route("/sse",      endpoint=handle_sse),  # MCP SSE endpoint
-        Mount("/messages", app=sse_transport.handle_post_message),
+        Route("/",              endpoint=health),           # Railway health check
+        Route("/health",        endpoint=health),           # Extra health endpoint
+        Route("/sse",           endpoint=handle_sse),       # MCP SSE endpoint
+        Mount("/messages",      app=sse_transport.handle_post_message),
+        # ── NEW REST API routes ──
+        Route("/api/students",  endpoint=api_students),     # Live student data
+        Route("/api/teachers",  endpoint=api_teachers),     # Live teacher data
+        Route("/api/stats",     endpoint=api_stats),        # Live summary stats
     ])
 
     starlette_app.add_middleware(
@@ -187,6 +255,7 @@ if __name__ == "__main__":
     )
 
     print(f"✅ GCHSS MCP Server starting on port {port}")
+    print(f"📊 REST API endpoints: /api/students | /api/teachers | /api/stats")
     uvicorn.run(
         starlette_app,
         host="0.0.0.0",
