@@ -153,7 +153,7 @@ if __name__ == "__main__":
         global _initialized
         # FIX: wait for MCP server to fully initialize before first connection
         if not _initialized:
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(3)
             _initialized = True
         async with sse_transport.connect_sse(
             request.scope, request.receive, request._send
